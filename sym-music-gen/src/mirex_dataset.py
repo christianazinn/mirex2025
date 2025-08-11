@@ -67,6 +67,22 @@ class MIREXCustomDataset(torch.utils.data.Dataset):
 
         labels[0:index_start_completion] = -100
 
+        # RWKV requires inputs to have a shape divisible by 16. Normally, this
+        # would be done by the data collator but since we are using the miditok data collator,
+        # which doesn't support pad_to_mulitple_of, we do it here instead.
+        shape_remainder = input_ids.shape[-1] % 16
+        input_ids = torch.nn.functional.pad(
+            input_ids, [0, (16 - shape_remainder)], value=self._tokenizer.pad_token_id
+        )
+        attention_mask = torch.nn.functional.pad(
+            attention_mask,
+            [0, (16 - shape_remainder)],
+            value=self._tokenizer.pad_token_id,
+        )
+        labels = torch.nn.functional.pad(
+            labels, [0, (16 - shape_remainder)], value=-100
+        )
+
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,

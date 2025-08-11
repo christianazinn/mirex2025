@@ -7,9 +7,15 @@ requires-python = ">=3.13"
 dependencies = [
     "accelerate>=1.9.0",
     "bitsandbytes>=0.46.1",
+    "lightning>=2.5.2",
     "miditok>=3.0.6.post1",
     "miditoolkit>=1.0.1",
+    "rwkv",
     "tensorboard>=2.20.0",
     "torch>=2.7.1",
     "transformers>=4.54.1",
 ]
+
+[tool.uv.sources]
+rwkv = { path = "../rwkv", editable = true }
+
