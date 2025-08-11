@@ -45,7 +45,9 @@ if 'x070' in os.environ["RWKV_MY_TESTING"]:
     CHUNK_LEN = 16
 
     flags = ['-res-usage', f'-D_C_={HEAD_SIZE}', f"-D_CHUNK_LEN_={CHUNK_LEN}", "--use_fast_math", "-O3", "-Xptxas -O3", "--extra-device-vectorization"]
-    load(name="wind_backstepping", sources=[f'cuda/wkv7_cuda.cu', 'cuda/wkv7_op.cpp'], is_python_module=False, verbose=True, extra_cuda_cflags=flags)
+    from pathlib import Path
+    root_path = str(Path(__file__).parent)
+    load(name="wind_backstepping", sources=[f'{root_path}/cuda/wkv7_cuda.cu', f'{root_path}/cuda/wkv7_op.cpp'], is_python_module=False, verbose=True, extra_cuda_cflags=flags)
 
     class WindBackstepping(torch.autograd.Function):
         @staticmethod
@@ -1030,7 +1032,7 @@ class Block(nn.Module):
             self.ffnPre = RWKV_ChannelMix(args, 0)
         else:
             if 'x070' in os.environ["RWKV_MY_TESTING"]:
-                self.att = RWKV_Tmix_x070(args, layer_id)
+                self.att = RWKV_Tmix_x070(args, layer_id).to(torch.bfloat16)
             elif 'x060a' in os.environ["RWKV_MY_TESTING"]:
                 self.att = RWKV_Tmix_x060a(args, layer_id)
             elif 'x060b' in os.environ["RWKV_MY_TESTING"]:
@@ -1072,7 +1074,10 @@ class Block(nn.Module):
             if self.layer_id == 0:
                 x = self.ln0(x)
 
-            x_attn, v_first = self.att(self.ln1(x), v_first)
+            norm1 = self.ln1(x).to(torch.bfloat16)
+            v_first = v_first.to(torch.bfloat16)
+            x_attn, v_first = self.att(norm1, v_first)
+            v_first = v_first.to(torch.float32)
             x = x + x_attn
 
             x = x + self.ffn(self.ln2(x))
@@ -1256,8 +1261,9 @@ class RWKV(pl.LightningModule):
             return cfg.get("offload_optimizer") or cfg.get("offload_param")
         return False
 
-    def forward(self, idx):
+    def forward(self, input_ids, **kwargs):
         args = self.args
+        idx = input_ids
         B, T = idx.size()
         assert T <= args.ctx_len, "Cannot forward, model ctx_len is exhausted."
 
@@ -1305,8 +1311,10 @@ class RWKV(pl.LightningModule):
             x = self.head(x) + c
         else:
             x = self.head(x)
+        
+        outputs = {"logits": x}
 
-        return x
+        return outputs
 
     def training_step(self, batch, batch_idx):
         args = self.args

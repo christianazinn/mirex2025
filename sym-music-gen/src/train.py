@@ -1,6 +1,8 @@
 import json
+from trainer import MIREXTrainer
 import transformers
 from mirex_dataset import MIREXCustomDataset
+import rwkv_utils
 import miditok
 from pathlib import Path
 
@@ -61,19 +63,22 @@ def main():
             if "eval" in k:
                 train_config.pop(k)
 
-    model_config = transformers.AutoConfig.from_pretrained(
-        args.model,
-        vocab_size=tokenizer.vocab_size,
-        hidden_size=512,
-        intermediate_size=1376,
-        num_hidden_layers=8,
-        num_attention_heads=8,
-    )
+    if args.model.upper() == "RWKV":
+        model = rwkv_utils.get_rwkv_model(tokenizer.vocab_size)
+    else:
+        model_config = transformers.AutoConfig.from_pretrained(
+            args.model,
+            vocab_size=tokenizer.vocab_size,
+            hidden_size=512,
+            intermediate_size=1376,
+            num_hidden_layers=8,
+            num_attention_heads=8,
+        )
 
-    model = transformers.AutoModelForCausalLM.from_config(
-        model_config, trust_remote_code=True
-    )
-    model.resize_token_embeddings(tokenizer.vocab_size)
+        model = transformers.AutoModelForCausalLM.from_config(
+            model_config, trust_remote_code=True
+        )
+        model.resize_token_embeddings(tokenizer.vocab_size)
 
     num_parameters = sum([x.numel() for x in model.parameters()])
     print(f"Model Parameters:\t{num_parameters / 1e6}")
@@ -82,7 +87,7 @@ def main():
 
     train_args = transformers.TrainingArguments(**train_config)
 
-    trainer = transformers.Trainer(
+    trainer = MIREXTrainer(
         model=model,
         args=train_args,
         train_dataset=train_data,
