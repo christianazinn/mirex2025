@@ -12,15 +12,15 @@
 MODEL_TYPE="x070" # x070 => rwkv-7.0
 #
 N_LAYER="12"
-N_EMBD="384"
+N_EMBD="512"
 #
-CTX_LEN="4096"
+CTX_LEN="1024"
 DATE_MM=$(date +%F)
 PROJ_DIR="out/"$CTX_LEN"iota-L"$N_LAYER"-D"$N_EMBD"-"$MODEL_TYPE"-"$DATE_MM # set output folder
 #
 #######################################################################################################################
 #
-M_BSZ="8" # CAN be 16 but for parity w fla it's 8
+M_BSZ="64" # CAN be 16 but for parity w fla it's 8
 LR_INIT="1e-4"
 LR_FINAL="1e-5"
 #
@@ -34,13 +34,14 @@ EPOCH_SAVE=1 # save every 50 "miniepochs" (1 miniepoch = 40320 * ctx_len tokens)
 #######################################################################################################################
 #
 N_NODE=1 # number of nodes
-GPU_PER_NODE=8 # number of GPUs per node
+GPU_PER_NODE=4 # number of GPUs per node
 #
 DS_BUCKET_MB=200 # set to 2 for consumer GPUs, set to 200 for A100 / H100 (affects speed & vram usage)
+DATA_PATH=/home/wavefunction/mirex2025/sym-music-gen/data/filtered_aria/train
 #
 # NOTE: there are a lot of pointless flags passed because I haven't bothered removing them from the train script;
 # these are relics of the binidx dataloader
-uv run train.py --train_data ../sym-music-gen/data/filtered_aria/train \
+uv run train.py --train_data $DATA_PATH \
    --wandb "" --proj_dir $PROJ_DIR \
  --data_file "/mnt/nvme0n1/pile/pile_20B_tokenizer_text_document" --data_type "binidx" --vocab_size 16000 --my_testing $MODEL_TYPE \
  --ctx_len $CTX_LEN --my_pile_stage 1 --epoch_count 1 --epoch_begin 0 \
@@ -49,7 +50,7 @@ uv run train.py --train_data ../sym-music-gen/data/filtered_aria/train \
  --lr_init 1e-4 --lr_final 1e-4 --warmup_steps 20 --beta1 0.9 --beta2 0.99 --adam_eps 1e-8 --my_pile_edecay 0 \
  --accelerator cpu --devices 1 --precision bf16 --strategy deepspeed_stage_2 --grad_cp 1
 
-uv run train.py --train_data ../sym-music-gen/data/filtered_aria/train \
+uv run train.py --train_data $DATA_PATH \
  --load_model $PROJ_DIR"/rwkv-init.pth" --wandb "MIREX-2025" --proj_dir $PROJ_DIR --my_testing $MODEL_TYPE \
  --ctx_len $CTX_LEN --my_pile_stage 3 --epoch_count 999999 --epoch_begin 0 \
  --data_file "/mnt/nvme0n1/pile/pile_20B_tokenizer_text_document" --my_exit_tokens 332115325534 --magic_prime 81082817 \

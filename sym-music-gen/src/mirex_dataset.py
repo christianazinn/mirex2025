@@ -19,7 +19,7 @@ class MIREXCustomDataset(torch.utils.data.Dataset):
         self._tokenizer = tokenizer
 
         self._num_prompt_measures = 4
-        self._num_completion_measures = 4
+        self._num_completion_measures = 12
         self._max_pitch_offset = max_pitch_offset
 
     def __len__(self):
@@ -87,14 +87,21 @@ class MIREXCustomDataset(torch.utils.data.Dataset):
         input_ids = torch.from_numpy(sample)
         attention_mask = torch.ones_like(input_ids, dtype=input_ids.dtype)
 
-        labels = input_ids.clone()
+        # labels must be shifted
+        labels = input_ids.clone()[1:]
+        input_ids = input_ids[:-1]
+
+        # truncate both to 1024 (hardcoded for now)
+        tgt_len = min(len(labels), len(input_ids), 1024)
+        labels = labels[:tgt_len]
+        input_ids = input_ids[:tgt_len]
 
         # Get the start of the completion measures
-        index_start_completion = torch.where(
-            labels == self._tokenizer.vocab["Bar_None"]
-        )[0][self._num_prompt_measures].item()
+        # index_start_completion = torch.where(
+        #     labels == self._tokenizer.vocab["Bar_None"]
+        # )[0][self._num_prompt_measures].item()
 
-        labels[0:index_start_completion] = -100
+        # labels[0:index_start_completion] = -100
 
         return {
             "input_ids": input_ids,

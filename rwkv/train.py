@@ -182,7 +182,7 @@ if __name__ == "__main__":
             args.dim_ffn = int((args.n_embd * 4) // 32 * 32)
         else:
             args.dim_ffn = int(
-                (args.n_embd * 3.5) // 32 * 32
+                (args.n_embd * 4) // 32 * 32
             )  # default = 3.5x emb size
 
     if args.data_type == "wds_img":
@@ -313,20 +313,11 @@ if __name__ == "__main__":
 
     default_special_tokens = miditok.TokenizerConfig().special_tokens
 
-    extra_tokens = [    # Tokens used for RAG set-up
-        "RAG_SEP",      # Separates RAG entries preceding the prompt
-        "SIM_START",    # Indicates start of RAG entry which is similar to the prompt
-        "SIM_END",      # Indicates end of RAG entry which is similar to the prompt
-        "PROMPT_START", # Indicates start of prompt
-        "GEN_START",    # Indicates start of score to ideally be generated
-    ]
-
     config = miditok.TokenizerConfig(
         pitch_range=(0, 127),
         use_velocities=False,
         encode_ids_splits="no",
         use_pitchdrum_tokens=False,
-        special_tokens = default_special_tokens + extra_tokens,
     )
 
     tokenizer = miditok.REMI(config)
@@ -334,10 +325,10 @@ if __name__ == "__main__":
     train_data = MIREXCustomDataset(
         args.train_data,
         tokenizer,
-        max_pitch_offset=6,
+        max_pitch_offset=0,
     )
 
-    args.vocab_size = 16000
+    args.vocab_size = tokenizer.len
 
     from src.model import RWKV
 
@@ -438,7 +429,7 @@ if __name__ == "__main__":
         return_mask=(args.my_qa_mask == 1),
     )
 
-    ds_num_workers = 8
+    ds_num_workers = 32
 
     data_loader = DataLoader(
         train_data,
@@ -449,6 +440,7 @@ if __name__ == "__main__":
         persistent_workers=False,
         drop_last=True,
         collate_fn=collate_fn,
+        prefetch_factor=8,
     )
 
     trainer.fit(model, data_loader)
