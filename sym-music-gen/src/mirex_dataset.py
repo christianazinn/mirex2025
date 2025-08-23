@@ -1,4 +1,6 @@
 from pathlib import Path
+import json
+import datasets
 import numpy as np
 import torch
 import miditok
@@ -66,6 +68,62 @@ class MIREXCustomDataset(torch.utils.data.Dataset):
         )[0][self._num_prompt_measures].item()
 
         labels[0:index_start_completion] = -100
+
+        return {
+            "input_ids": input_ids,
+            "attention_mask": attention_mask,
+            "labels": labels,
+        }
+
+
+class MIREXPreprocessedDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset_path: Path, max_pitch_offset: int = 0):
+        super().__init__()
+        self._ds = datasets.load_from_disk(dataset_path)
+
+        if "train" in self._ds:
+            self._ds = self._ds["train"]
+
+        self._ds.set_format("torch")
+
+        with (dataset_path / "metadata.json").open() as io:
+            self._pitch_tokens = torch.tensor(json.load(io)["pitch_tokens"])
+            self._pitch_token_offset = self._pitch_tokens[0]
+
+        self._max_pitch_offset = max_pitch_offset
+        self._num_prompt_bars = 4
+
+    def __len__(self):
+        return len(self._ds)
+
+    def __getitem__(self, idx: int):
+        sample = self._ds[idx]
+
+        input_ids = torch.as_tensor(sample["tokens"], dtype=torch.long)[0:1024]
+        bar_starts = [x for x in sample["bar_starts"] if x < 1024]
+
+        if self._max_pitch_offset > 0:
+            pitch_tokens = torch.isin(input_ids, self._pitch_tokens)
+            max_pitch = input_ids[pitch_tokens].max() - self._pitch_token_offset
+            min_pitch = input_ids[pitch_tokens].min() - self._pitch_token_offset
+
+            min_augment_pitch = (
+                max(0, min_pitch.item() - self._max_pitch_offset) - min_pitch.item()
+            )
+            max_augment_pitch = (
+                min(127, max_pitch.item() + self._max_pitch_offset) - max_pitch.item()
+            )
+
+            augment_pitch = torch.randint(min_augment_pitch, max_augment_pitch, (1,))
+
+            input_ids[pitch_tokens] += augment_pitch
+
+        attention_mask = torch.ones_like(input_ids, dtype=input_ids.dtype)
+        attention_mask[input_ids == 0] = 0  # Don't attend to pad tokens
+        labels = input_ids.clone()
+
+        prompt_bar_end = bar_starts[self._num_prompt_bars]
+        # labels[0:prompt_bar_end] = -100
 
         return {
             "input_ids": input_ids,

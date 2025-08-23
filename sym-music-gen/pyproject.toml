@@ -7,9 +7,13 @@ requires-python = ">=3.13"
 dependencies = [
     "accelerate>=1.9.0",
     "bitsandbytes>=0.46.1",
+    "datasets>=4.0.0",
     "miditok>=3.0.6.post1",
     "miditoolkit>=1.0.1",
+    "mistral-common[audio]>=1.8.3",
     "tensorboard>=2.20.0",
     "torch>=2.7.1",
+    "torchaudio>=2.7.1",
     "transformers>=4.54.1",
+    "vllm>=0.10.0",
 ]
