@@ -69,10 +69,29 @@ if 'x070' in os.environ["RWKV_MY_TESTING"]:
             torch.ops.wind_backstepping.backward(w,q,k,v,z,b, dy,s,sa, dw,dq,dk,dv,dz,db)
             return dw,dq,dk,dv,dz,db
 
-    def RUN_CUDA_RWKV7g(q,w,k,v,a,b):
-        B,T,HC = q.shape
-        q,w,k,v,a,b = [i.view(B,T,HC//64,64) for i in [q,w,k,v,a,b]]
-        return WindBackstepping.apply(w,q,k,v,a,b).view(B,T,HC)
+    def RUN_CUDA_RWKV7g(q,w,k,v,a,b,
+                        # These args must be typed, so that the CUDA
+                        # compiler knows how to handle them.
+                        chunk_len: int=CHUNK_LEN, group: int=64,
+                        ):
+        # shapes
+        assert q.ndim == 3, f"Expected (B,T,HC), got {q.shape}"
+        B, T, HC = q.shape
+        for name, t in {"q": q, "w": w, "k": k, "v": v, "a": a, "b": b}.items():
+            assert t.shape == (B, T, HC), f"{name}.shape={t.shape} != {(B, T, HC)}"
+
+        # multiples
+        assert T % chunk_len == 0, f"seq len T={T} must be a multiple of {chunk_len}"
+        assert HC % group == 0, f"HC={HC} must be divisible by {group} (so HC//{group} is integer)"
+
+        # dtype & contiguity (your existing checks)
+        for name, t in {"q": q, "w": w, "k": k, "v": v, "a": a, "b": b}.items():
+            assert t.dtype == torch.bfloat16, f"{name}.dtype={t.dtype}, expected bfloat16"
+            assert t.is_contiguous(), f"{name} must be contiguous"
+
+        H = HC // group
+        q, w, k, v, a, b = [t.view(B, T, H, group) for t in (q, w, k, v, a, b)]
+        return WindBackstepping.apply(w, q, k, v, a, b).view(B, T, HC)
 
 elif 'x060' in os.environ["RWKV_MY_TESTING"]:
     if os.environ["RWKV_TRAIN_TYPE"] == 'states':

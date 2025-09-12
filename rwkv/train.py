@@ -12,10 +12,16 @@ if __name__ == "__main__":
     from pytorch_lightning.utilities import rank_zero_info, rank_zero_only
     import pytorch_lightning as pl
 
+    from pathlib import Path
+
+    from collator import make_collate_fn
+
+
     rank_zero_info("########## work in progress ##########")
 
     parser = ArgumentParser()
 
+    parser.add_argument("--train_data", type=Path)
     parser.add_argument("--load_model", default="", type=str)  # full path, with .pth
     parser.add_argument(
         "--wandb", default="", type=str
@@ -176,7 +182,7 @@ if __name__ == "__main__":
             args.dim_ffn = int((args.n_embd * 4) // 32 * 32)
         else:
             args.dim_ffn = int(
-                (args.n_embd * 3.5) // 32 * 32
+                (args.n_embd * 4) // 32 * 32
             )  # default = 3.5x emb size
 
     if args.data_type == "wds_img":
@@ -302,13 +308,27 @@ if __name__ == "__main__":
     ########################################################################################################
 
     from src.trainer import train_callback, generate_init_weight
+    from src.mirex_dataset import MIREXCustomDataset
+    import miditok
 
-    # TODO: plug in john's dataloader
-    from src.dataset import Dataset
+    default_special_tokens = miditok.TokenizerConfig().special_tokens
 
-    train_data = Dataset()
+    config = miditok.TokenizerConfig(
+        pitch_range=(0, 127),
+        use_velocities=False,
+        encode_ids_splits="no",
+        use_pitchdrum_tokens=False,
+    )
 
-    args.vocab_size = 16000
+    tokenizer = miditok.REMI(config)
+
+    train_data = MIREXCustomDataset(
+        args.train_data,
+        tokenizer,
+        max_pitch_offset=0,
+    )
+
+    args.vocab_size = tokenizer.len
 
     from src.model import RWKV
 
@@ -320,6 +340,8 @@ if __name__ == "__main__":
         init_weight_name = f"{args.proj_dir}/rwkv-init.pth"
         generate_init_weight(model, init_weight_name)  # save initial weights
         args.load_model = init_weight_name
+
+    args.load_model = "/home/christian/mirex2025/rwkv/out/1024iota-L12-D384-x070-2025-08-18/rwkv-4.pth"
 
     rank_zero_info(f"########## Loading {args.load_model}... ##########")
     try:
@@ -395,7 +417,21 @@ if __name__ == "__main__":
             args.ds_bucket_mb * 1000 * 1000
         )
 
-    ds_num_workers = 8
+    pad_id = getattr(tokenizer, "pad_token_id", None)
+    if pad_id is None:
+        # miditok exposes PAD in vocab; fall back if needed
+        pad_id = tokenizer.vocab.get("PAD_None", 0)
+
+    max_16_bar_seq_len = 2695 # See find_longest_16_bar_window.py
+    # I hear rwkv expects a length which is a multiple of 16
+    pad_to_len = max_16_bar_seq_len + (16 - max_16_bar_seq_len % 16)
+
+    collate_fn = make_collate_fn(
+        pad_id,
+        return_mask=(args.my_qa_mask == 1),
+    )
+
+    ds_num_workers = 32
 
     data_loader = DataLoader(
         train_data,
@@ -405,6 +441,8 @@ if __name__ == "__main__":
         num_workers=ds_num_workers,
         persistent_workers=False,
         drop_last=True,
+        collate_fn=collate_fn,
+        prefetch_factor=8,
     )
 
     trainer.fit(model, data_loader)
