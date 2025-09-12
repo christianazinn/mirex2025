@@ -12,7 +12,7 @@
 MODEL_TYPE="x070" # x070 => rwkv-7.0
 #
 N_LAYER="12"
-N_EMBD="512"
+N_EMBD="384"
 #
 CTX_LEN="1024"
 DATE_MM=$(date +%F)
@@ -20,7 +20,7 @@ PROJ_DIR="out/"$CTX_LEN"iota-L"$N_LAYER"-D"$N_EMBD"-"$MODEL_TYPE"-"$DATE_MM # se
 #
 #######################################################################################################################
 #
-M_BSZ="64" # CAN be 16 but for parity w fla it's 8
+M_BSZ="32" # CAN be 16 but for parity w fla it's 8
 LR_INIT="1e-4"
 LR_FINAL="1e-5"
 #
@@ -34,10 +34,10 @@ EPOCH_SAVE=1 # save every 50 "miniepochs" (1 miniepoch = 40320 * ctx_len tokens)
 #######################################################################################################################
 #
 N_NODE=1 # number of nodes
-GPU_PER_NODE=4 # number of GPUs per node
+GPU_PER_NODE=1 # number of GPUs per node
 #
-DS_BUCKET_MB=200 # set to 2 for consumer GPUs, set to 200 for A100 / H100 (affects speed & vram usage)
-DATA_PATH=/home/wavefunction/mirex2025/sym-music-gen/data/filtered_aria/train
+DS_BUCKET_MB=2 # set to 2 for consumer GPUs, set to 200 for A100 / H100 (affects speed & vram usage)
+DATA_PATH=/home/christian/mirex2025/sym-music-gen/data/filtered_aria/train
 #
 # NOTE: there are a lot of pointless flags passed because I haven't bothered removing them from the train script;
 # these are relics of the binidx dataloader

@@ -6,7 +6,7 @@ from pathlib import Path
 
 random.seed(1337)
 
-dataset_path = Path.cwd() / "data" / "aria" / "aria-midi-v1-pruned-ext"
+dataset_path = Path("/home/christian/mirex2025/aria-midi-v1-pruned-ext")
 frac_val = 0.1
 min_score = 0.9
 

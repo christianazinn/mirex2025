@@ -341,6 +341,8 @@ if __name__ == "__main__":
         generate_init_weight(model, init_weight_name)  # save initial weights
         args.load_model = init_weight_name
 
+    args.load_model = "/home/christian/mirex2025/rwkv/out/1024iota-L12-D384-x070-2025-08-18/rwkv-4.pth"
+
     rank_zero_info(f"########## Loading {args.load_model}... ##########")
     try:
         load_dict = torch.load(args.load_model, map_location="cpu")
