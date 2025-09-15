@@ -1,6 +1,6 @@
 import json
 import transformers
-from mirex_dataset import MIREXCustomDataset
+from mirex_dataset import MIREXPreprocessedDataset
 import miditok
 from pathlib import Path
 
@@ -47,12 +47,9 @@ def main():
 
     tokenizer = miditok.REMI(config)
 
-    train_data = MIREXCustomDataset(
-        args.train_data, tokenizer=tokenizer, max_pitch_offset=6
-    )
+    train_data = MIREXPreprocessedDataset(args.train_data, max_pitch_offset=6)
     if args.val_data:
-        val_data = MIREXCustomDataset(args.val_data, tokenizer=tokenizer)
-        val_data = torch.utils.data.Subset(val_data, range(4000))
+        val_data = MIREXPreprocessedDataset(args.val_data, fixed=True)
     else:
         print("Running without validation data.")
         val_data = None
@@ -64,9 +61,9 @@ def main():
     model_config = transformers.AutoConfig.from_pretrained(
         args.model,
         vocab_size=tokenizer.vocab_size,
-        hidden_size=512,
-        intermediate_size=1376,
-        num_hidden_layers=8,
+        hidden_size=768,
+        intermediate_size=2048,
+        num_hidden_layers=12,
         num_attention_heads=8,
     )
 
